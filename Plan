@@ -1,0 +1,63 @@
+Game Jam Spielkonzept: Der Pilz-Magier
+
+Spielname (Platzhalter): Der Pilz-Magier (oder ähnliches, kann noch geändert werden)
+
+Genre: Action-Roguelite (Topdown)
+
+Visueller Stil: Pixelart
+
+Kernkonzept:
+Spieler steuert einen Magier, der durch den übermäßigen Verzehr von Pilzen selbst pilzähnliche Eigenschaften entwickelt hat. Ziel ist es, einen riesigen Pilz-Dungeon zu erklimmen.
+
+Gameplay-Elemente:
+
+    Charakter:
+
+        Magier/Pilz-Hybrid: Der Spielercharakter ist ein Magier, der durch Pilzkonsum mutiert ist.
+
+        Stab als Waffe: Der Magier führt einen Stab, in den verschiedene "Riesenpilze" eingesetzt werden können.
+
+            Beispiele: Blauer Pilz für Frostzauber, Roter Pilz für Feuerzauber. Jeder Pilztyp im Stab verleiht dem Magier spezifische Fähigkeiten oder Elementarzauber.
+
+    Dungeon:
+
+        Riesiger Pilz: Der Dungeon ist ein riesiger Pilz, der vertikal erkundet wird. Spieler klettert immer weiter nach oben.
+
+        Ebenen: Der Pilz ist in verschiedene Ebenen unterteilt.
+
+    Pilze als Multifunktionale Ressource:
+
+        Überleben (Timer): Pilze sind lebenswichtig. Ein "Pilzsucht"-Timer zwingt den Spieler, regelmäßig Pilze zu konsumieren, um nicht zu sterben.
+
+        Heilung: Pilze können gegessen werden, um Lebenspunkte wiederherzustellen.
+
+        Währung: Pilze dienen als primäre Währung im Spiel.
+
+    Spielmechaniken:
+
+        Action-Gameplay: Fokus auf Kampf und Erkundung in Echtzeit.
+
+        Topdown-Perspektive: Draufsicht für bessere Übersicht im Kampf und bei der Navigation.
+
+        Inventarsystem: Zum Verwalten der gesammelten Pilze, Stäbe und anderer Gegenstände.
+
+        Zufallsgenerierung: Level-Layouts, Feindplatzierungen und Pilz-Spawns werden prozedural generiert, um Wiederspielbarkeit zu gewährleisten.
+
+    Roguelite-Elemente:
+
+        Tod und Fortschritt: Beim Tod muss der Spieler die aktuelle Ebene neu starten. Bestimmte Fortschritte (z.B. freigeschaltete Fähigkeiten, gesammelte Ressourcen) könnten über den Tod hinaus bestehen bleiben, um ein Gefühl der Progression zu vermitteln.
+
+        Händler-Ebene: Eine spezielle Ebene im Pilz dient als Händlerbereich. Hier können Spieler Pilze gegen Upgrades, neue Pilztypen für den Stab oder andere nützliche Gegenstände eintauschen.
+
+Zusätzliche Überlegungen für die Entwicklung:
+
+    Pilz-Typen: Vielfalt an Pilzen mit unterschiedlichen Effekten (z.B. temporäre Buffs, Debuffs für Gegner).
+
+    Gegner: Design von pilzbezogenen oder mutierten Kreaturen als Feinde.
+
+    Bosskämpfe: Einführung von Bossen am Ende wichtiger Abschnitte des Pilzes.
+
+    Upgrade-Pfade: Möglichkeiten zur permanenten Verbesserung des Magiers (z.B. mehr Gesundheit, erhöhte Pilzsucht-Toleranz).
+
+    Umweltinteraktion: Interaktive Elemente im Dungeon, die Pilze oder andere Ressourcen freisetzen.
+
