@@ -5,6 +5,7 @@ TagManager:
   serializedVersion: 3
   tags:
   - ExitLevel
+  - ScoreShroom
   layers:
   - Default
   - TransparentFX
