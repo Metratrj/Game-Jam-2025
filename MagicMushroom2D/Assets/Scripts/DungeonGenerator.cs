@@ -85,7 +85,10 @@ public class DungeonGenerator : MonoBehaviour
     private List<WallTileMapping> wallTileMappings = new List<WallTileMapping>();
     public Dictionary<WallType, TileBase> wallTiles = new Dictionary<WallType, TileBase>();
 
-    private struct Room
+    public Room StartRoom { get; set; } // Start room for the player
+    public Room ExitRoom { get; set; } // Exit room for the level
+
+    public class Room
     {
         public RectInt bounds { get; private set; }
         public Vector2 center => bounds.center;
@@ -107,12 +110,65 @@ public class DungeonGenerator : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        
+
         Debug.Log("DungeonGenerator started.");
         // Generate the dungeon when the script starts
         // This can be called from the editor or at runtime.
         // You can also call this method from a button in the inspector.
         GenerateDungeon();
+    }
+
+    private float GetRoomDistance(Room roomA, Room roomB)
+    {
+        // Berechne den Abstand zwischen den Mittelpunkten der beiden Räume
+        Vector2 centerA = roomA.center;
+        Vector2 centerB = roomB.center;
+        return Vector2.Distance(centerA, centerB);
+    }
+
+    private void FindStartAndEndRooms()
+    {
+        if (rooms.Count < 2)
+        {
+            Debug.LogWarning("Nicht genug Räume, um Start- und Endräume zu finden.");
+            StartRoom = rooms.Count > 0 ? rooms[0] : null;
+            ExitRoom = rooms.Count > 1 ? rooms[1] : null;
+            return;
+        }
+
+        float maxDistance = 0f;
+        Room currentStartRoom = null;
+        Room currentEndRoom = null;
+
+        // Iteriere über alle möglichen Raum-Paare
+        for (int i = 0; i < rooms.Count; i++)
+        {
+            for (int j = i + 1; j < rooms.Count; j++) // Beginnt bei i+1, um Duplikate und Selbstvergleiche zu vermeiden
+            {
+                Room room1 = rooms[i];
+                Room room2 = rooms[j];
+
+                float distance = GetRoomDistance(room1, room2);
+
+                if (distance > maxDistance)
+                {
+                    maxDistance = distance;
+                    currentStartRoom = room1;
+                    currentEndRoom = room2;
+                }
+            }
+        }
+
+
+        StartRoom = currentStartRoom;
+        ExitRoom = currentEndRoom;
+
+        if (StartRoom is not null && ExitRoom is not null)
+        {
+            Debug.Log($"Startraum gefunden bei: {StartRoom.bounds.center}");
+            Debug.Log($"Endraum gefunden bei: {ExitRoom.bounds.center}");
+
+        }
     }
 
     void Awake()
@@ -184,6 +240,8 @@ public class DungeonGenerator : MonoBehaviour
         ConnectRooms();
 
         DrawTiles();
+
+        FindStartAndEndRooms();
     }
 
     private void PlaceRooms()
@@ -352,79 +410,79 @@ public class DungeonGenerator : MonoBehaviour
         }
     }
 
-    // Helper-Funktion, um zu prüfen, ob eine Zelle Boden ist
-private bool IsGround(Vector3Int position)
-{
-    return groundTilemap.GetTile(position) != null;
-}
-
-private WallType GetWallType(Vector3Int position)
-{
-    // Status der direkten Nachbarn
-    bool top = IsGround(position + new Vector3Int(0, 1, 0));
-    bool bottom = IsGround(position + new Vector3Int(0, -1, 0));
-    bool left = IsGround(position + new Vector3Int(-1, 0, 0));
-    bool right = IsGround(position + new Vector3Int(1, 0, 0));
-
-    // Status der diagonalen Nachbarn
-    bool topLeft = IsGround(position + new Vector3Int(-1, 1, 0));
-    bool topRight = IsGround(position + new Vector3Int(1, 1, 0));
-    bool bottomLeft = IsGround(position + new Vector3Int(-1, -1, 0));
-    bool bottomRight = IsGround(position + new Vector3Int(1, -1, 0));
-
-    // --- Priorität 1: Innere Ecken (konkave Ecken) ---
-    // Dies sind Fälle, wo der Boden in die Wand "einspringt"
-    // Beispiel: InnerBottomRight -> Oben und Links ist Boden, aber oben-links ist KEIN Boden
-    if (top && left && !topLeft && !bottom && !right) return WallType.InnerBottomRight;
-    if (top && right && !topRight && !bottom && !left) return WallType.InnerBottomLeft;
-    if (bottom && left && !bottomLeft && !top && !right) return WallType.InnerTopRight;
-    if (bottom && right && !bottomRight && !top && !left) return WallType.InnerTopLeft;
-
-    // --- Priorität 2: Äußere Ecken (konvexe Ecken) ---
-    // Beispiel: BottomLeft -> Oben und Rechts ist Boden
-    if (top && right && !bottom && !left) return WallType.BottomLeft; // Wall is Bottom-Left of ground area
-    if (top && left && !bottom && !right) return WallType.BottomRight; // Wall is Bottom-Right of ground area
-    if (bottom && right && !top && !left) return WallType.TopLeft; // Wall is Top-Left of ground area
-    if (bottom && left && !top && !right) return WallType.TopRight; // Wall is Top-Right of ground area
-
-    // --- Priorität 3: Geraden Kanten / Einzelne Seiten ---
-    // Beispiel: Top -> Unten ist Boden
-    if (top && !bottom && !left && !right) return WallType.Bottom; // Wall is below ground
-    if (bottom && !top && !left && !right) return WallType.Top; // Wall is above ground
-    if (left && !right && !top && !bottom) return WallType.Right; // Wall is right of ground
-    if (right && !left && !top && !bottom) return WallType.Left; // Wall is left of ground
-
-    // --- Priorität 4: Geraden Wände (umgeben von Boden auf zwei gegenüberliegenden Seiten) ---
-    if (top && bottom && !left && !right) return WallType.Full; // Vertikale Wand
-    if (left && right && !top && !bottom) return WallType.Full; // Horizontale Wand
-
-    // --- Priorität 5: T-Kreuzungen (wenn du diese Tiles hast) ---
-    if (top && bottom && left && !right) return WallType.T_Right;
-    if (top && bottom && right && !left) return WallType.T_Left;
-    if (top && left && right && !bottom) return WallType.T_Down;
-    if (bottom && left && right && !top) return WallType.T_Up;
-
-    // --- Priorität 6: Kreuzung (wenn alle 4 Seiten Boden sind, aber die Zelle selbst keine ist) ---
-    if (top && bottom && left && right)
+    // Helper-Funktion, um zu prüfen, ob eine Zelle Boden istBottomLeft
+    private bool IsGround(Vector3Int position)
     {
-        // Könnte eine Kreuzung sein, oder auch nur ein überflüssiger Wandversuch
-        // Wenn du ein spezielles Kreuzungs-Tile hast, hier verwenden, sonst None
-        return WallType.Cross; // Wenn du ein solches Tile hast
+        return groundTilemap.GetTile(position) != null;
     }
 
-    // --- Fallback: Wenn KEINER der Nachbarn Boden ist, dann ist es auch keine Wand. ---
-    // Dies fängt Zellen ab, die weit außerhalb des Dungeons liegen.
-    if (!top && !bottom && !left && !right && !topLeft && !topRight && !bottomLeft && !bottomRight)
+    private WallType GetWallType(Vector3Int position)
     {
-        return WallType.None;
-    }
+        // Status der direkten Nachbarn
+        bool top = IsGround(position + new Vector3Int(0, 1, 0));
+        bool bottom = IsGround(position + new Vector3Int(0, -1, 0));
+        bool left = IsGround(position + new Vector3Int(-1, 0, 0));
+        bool right = IsGround(position + new Vector3Int(1, 0, 0));
 
-    // Letzter Fallback: Wenn wir hier ankommen, haben wir eine Kombination von Nachbarn,
-    // die keinem der spezifischen WallTypes oben zugeordnet werden konnten.
-    // In diesem Fall kannst du ein generisches "Full" Tile verwenden oder es als "None" behandeln.
-    // Ein "Full" Tile ist hier oft eine gute Notlösung.
-    return WallType.Full;
-}
+        // Status der diagonalen Nachbarn
+        bool topLeft = IsGround(position + new Vector3Int(-1, 1, 0));
+        bool topRight = IsGround(position + new Vector3Int(1, 1, 0));
+        bool bottomLeft = IsGround(position + new Vector3Int(-1, -1, 0));
+        bool bottomRight = IsGround(position + new Vector3Int(1, -1, 0));
+
+        // --- Priorität 1: Innere Ecken (konkave Ecken) ---
+        // Dies sind Fälle, wo der Boden in die Wand "einspringt"
+        // Beispiel: InnerBottomRight -> Oben und Links ist Boden, aber oben-links ist KEIN Boden
+        if (top && left && !topLeft && !bottom && !right) return WallType.InnerBottomRight;
+        if (top && right && !topRight && !bottom && !left) return WallType.InnerBottomLeft;
+        if (bottom && left && !bottomLeft && !top && !right) return WallType.InnerTopRight;
+        if (bottom && right && !bottomRight && !top && !left) return WallType.InnerTopLeft;
+
+        // --- Priorität 2: Äußere Ecken (konvexe Ecken) ---
+        // Beispiel: BottomLeft -> Oben und Rechts ist Boden
+        if (top && right && !bottom && !left) return WallType.BottomLeft; // Wall is Bottom-Left of ground area
+        if (top && left && !bottom && !right) return WallType.BottomRight; // Wall is Bottom-Right of ground area
+        if (bottom && right && !top && !left) return WallType.TopLeft; // Wall is Top-Left of ground area
+        if (bottom && left && !top && !right) return WallType.TopRight; // Wall is Top-Right of ground area
+
+        // --- Priorität 3: Geraden Kanten / Einzelne Seiten ---
+        // Beispiel: Top -> Unten ist Boden
+        if (top && !bottom && !left && !right) return WallType.Bottom; // Wall is below ground
+        if (bottom && !top && !left && !right) return WallType.Top; // Wall is above ground
+        if (left && !right && !top && !bottom) return WallType.Right; // Wall is right of ground
+        if (right && !left && !top && !bottom) return WallType.Left; // Wall is left of ground
+
+        // --- Priorität 4: Geraden Wände (umgeben von Boden auf zwei gegenüberliegenden Seiten) ---
+        if (top && bottom && !left && !right) return WallType.Full; // Vertikale Wand
+        if (left && right && !top && !bottom) return WallType.Full; // Horizontale Wand
+
+        // --- Priorität 5: T-Kreuzungen (wenn du diese Tiles hast) ---
+        if (top && bottom && left && !right) return WallType.T_Right;
+        if (top && bottom && right && !left) return WallType.T_Left;
+        if (top && left && right && !bottom) return WallType.T_Down;
+        if (bottom && left && right && !top) return WallType.T_Up;
+
+        // --- Priorität 6: Kreuzung (wenn alle 4 Seiten Boden sind, aber die Zelle selbst keine ist) ---
+        if (top && bottom && left && right)
+        {
+            // Könnte eine Kreuzung sein, oder auch nur ein überflüssiger Wandversuch
+            // Wenn du ein spezielles Kreuzungs-Tile hast, hier verwenden, sonst None
+            return WallType.Cross; // Wenn du ein solches Tile hast
+        }
+
+        // --- Fallback: Wenn KEINER der Nachbarn Boden ist, dann ist es auch keine Wand. ---
+        // Dies fängt Zellen ab, die weit außerhalb des Dungeons liegen.
+        if (!top && !bottom && !left && !right && !topLeft && !topRight && !bottomLeft && !bottomRight)
+        {
+            return WallType.None;
+        }
+
+        // Letzter Fallback: Wenn wir hier ankommen, haben wir eine Kombination von Nachbarn,
+        // die keinem der spezifischen WallTypes oben zugeordnet werden konnten.
+        // In diesem Fall kannst du ein generisches "Full" Tile verwenden oder es als "None" behandeln.
+        // Ein "Full" Tile ist hier oft eine gute Notlösung.
+        return WallType.Full;
+    }
 
     private BoundsInt GetDungeonBounds()
     {

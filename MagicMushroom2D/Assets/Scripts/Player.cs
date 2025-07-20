@@ -8,19 +8,46 @@ public class Player : MonoBehaviour
     private Vector2 moveInput;
     private Animator animator;
 
+    private bool hasReceivedInput = false; // NEU: Flag, ob schon Eingabe da war
+
     private void Start()
     {
         rb = GetComponent<Rigidbody2D>();
         animator = GetComponent<Animator>();
+
+        // NEU: Deaktiviere den Rigidbody beim Start temporär
+        // Das verhindert, dass die Physik den Spieler direkt verschiebt,
+        // bevor er seine tatsächliche Startposition erhält und eine Eingabe hat.
+        if (rb != null)
+        {
+            rb.isKinematic = true; // Macht den Rigidbody unbeweglich durch Physik
+            rb.linearVelocity = Vector2.zero; // Stellt sicher, dass keine Restgeschwindigkeit da ist
+        }
     }
 
     private void Update()
     {
-        rb.linearVelocity = moveInput * moveSpeed;
+        // Nur Bewegung anwenden, wenn wir Input haben UND der Rigidbody nicht null ist
+        if (rb != null && hasReceivedInput)
+        {
+            rb.linearVelocity = moveInput * moveSpeed;
+        }
+        else if (rb != null)
+        {
+            // Wenn noch kein Input, Rigidbody in Ruhe halten
+            rb.linearVelocity = Vector2.zero;
+        }
     }
 
     public void Move(InputAction.CallbackContext context)
     {
+        // NEU: Aktiviere den Rigidbody bei der ersten Bewegungseingabe
+        if (!hasReceivedInput && rb != null)
+        {
+            rb.isKinematic = false; // Rigidbody wird wieder von der Physik beeinflusst
+            hasReceivedInput = true;
+        }
+
         animator.SetBool("IsWalking", true);
 
         if (context.canceled)
