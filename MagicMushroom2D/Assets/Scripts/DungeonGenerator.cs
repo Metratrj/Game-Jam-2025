@@ -51,6 +51,9 @@ public class DungeonGenerator : MonoBehaviour
     public Tilemap wallTilemap;
     public TileBase groundTile;
     public TileBase wallTile;
+    public Tilemap collisionTilemap;
+    [Header("Collision Tile")]
+    [SerializeField] private TileBase collisionTile; // Tile für Kollisionen, falls benötigt
 
     [Header("Prefabs für Entitäten")] public GameObject playerPrefab;
     public GameObject enemyPrefab;
@@ -239,6 +242,9 @@ public class DungeonGenerator : MonoBehaviour
         // Clear previous tiles and rooms
         groundTilemap.ClearAllTiles();
         wallTilemap.ClearAllTiles();
+        collisionTilemap.ClearAllTiles();
+
+
         rooms.Clear();
 
         PlaceRooms();
@@ -475,6 +481,60 @@ public class DungeonGenerator : MonoBehaviour
                     if (wallTiles.ContainsKey(WallType.Full)) // Optional: Fallback auf ein Standard-Wand-Tile
                     {
                         wallTilemap.SetTile(pos, wallTiles[WallType.Full]);
+                    }
+                }
+
+
+                // NEU: Logik für die Kollisions-Tilemap (nur für die untere Hälfte der Wände, die blockieren soll)
+                // Wir malen das collisionTile nur, wenn die Zelle *direkt über* Boden ist,
+                // oder wenn sie links/rechts von Boden ist, um auch seitliche Wände zu erfassen,
+                // aber nicht die Gänge blockiert.
+
+                // Wichtig: Die genaue Logik hängt davon ab, wie deine "halb begehbaren" Wände aussehen.
+                // Angenommen, der untere Teil der Wand ist die Kollision.
+                // Das bedeutet, eine Kollision ist dort, wo oben oder an den Seiten Boden ist,
+                // ABER die Position selbst KEIN Boden ist.
+
+                // Überprüfen, ob die aktuelle Position direkt unter einem Bodentile ist ODER
+                // ob sie horizontal zwischen zwei Bodentiles liegt.
+                bool hasGroundAbove = IsGround(pos + new Vector3Int(0, 1, 0)); // Ist Zelle über mir Boden?
+                bool hasGroundBelow = IsGround(pos + new Vector3Int(0, -1, 0)); // Ist Zelle unter mir Boden?
+                bool hasGroundLeft = IsGround(pos + new Vector3Int(-1, 0, 0)); // Ist Zelle links von mir Boden?
+                bool hasGroundRight = IsGround(pos + new Vector3Int(1, 0, 0)); // Ist Zelle rechts von mir Boden?
+
+                // Dies ist eine Vereinfachung für Wände, die nur die "obere" Hälfte einer Kachel blockieren
+                // oder "Seite" der Kachel.
+                // Wenn die Zelle eine Wand sein soll UND die Zelle direkt darunter KEIN Boden ist,
+                // aber die Zelle selbst nicht Boden ist, UND es benachbarten Boden gibt,
+                // dann sollte hier ein Collider sein.
+                
+                // Wir setzen einen Kollider, wenn die aktuelle Zelle leer ist (kein Boden)
+                // UND (es gibt Boden direkt darüber ODER es gibt Boden links UND rechts von mir ODER es gibt Boden links UND rechts von mir)
+                // Die Annahme ist, dass eine Kollisionswand immer an eine begehbare Fläche angrenzt.
+                // Diese Logik muss evtl. nochmal feingetuned werden, je nach Wand-Design.
+                if (!IsGround(pos) &&
+                    (hasGroundAbove || hasGroundBelow || hasGroundLeft || hasGroundRight))
+                {
+                    // Das ist eine Position, die eine Wand (visuell oder unsichtbar) sein könnte.
+                    // Wir wollen einen Kollider nur für die Bereiche, die wirklich unpassierbar sind.
+                    // Für "halb begehbare" Wände: der Collider ist dort, wo die Textur ist.
+                    // Wenn z.B. nur die obere Hälfte des Tiles eine Wand ist, und die untere Hälfte begehbar ist.
+                    // Dein `WallType` System hilft, dies zu identifizieren.
+                    // Du könntest hier prüfen:
+                    // if (visualType == WallType.Top || visualType == WallType.TopLeft || visualType == WallType.TopRight || ...)
+                    // ABER FÜR GAME JAM SCHNELLIGKEIT:
+                    // Wir malen einfach auf jede Zelle, die von GetWallType als irgendeine Art von Wand identifiziert wird,
+                    // einen Collider. Das ist eine schnelle Überbrückung, auch wenn es nicht 100% präzise ist
+                    // für "halb begehbare" Wände.
+
+                    // Der schnellste Weg, das Kollisionsproblem zu lösen, ist:
+                    // Male einen Collider auf JEDE Zelle, die GetWallType als NICHT-None identifiziert
+                    // und die selbst KEIN Boden ist.
+                    if (type != WallType.None && collisionTile != null)
+                    {
+                        // Nur setzen, wenn die Zelle keine Überlappung mit Boden hat
+                        // Dies sollte durch !IsGround(pos) bereits abgedeckt sein.
+                        collisionTilemap.SetTile(pos, collisionTile);
                     }
                 }
             }
