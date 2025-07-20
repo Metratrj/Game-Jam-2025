@@ -58,6 +58,11 @@ public class DungeonGenerator : MonoBehaviour
     public GameObject exitPrefab;
 
     [Header("Generator-Settings")]
+    [SerializeField]
+    private int enemiesPerRoom = 2; // Anzahl der Gegner pro Raum
+
+
+
     [Tooltip("Breite der generierten Ebene in Tiles")]
     public int levelWidth = 100;
 
@@ -242,6 +247,40 @@ public class DungeonGenerator : MonoBehaviour
         DrawTiles();
 
         FindStartAndEndRooms();
+
+        SpawnEnemies();
+    }
+
+    private void SpawnEnemies()
+    {
+        if (enemyPrefab == null)
+        {
+            Debug.LogWarning("Enemy Prefab ist nicht zugewiesen. Es werden keine Gegner gespawnt.");
+            return;
+        }
+
+        foreach (Room room in rooms)
+        {
+            // Spawne keine Gegner im Start- oder Endraum für einen besseren Flow
+            if (room == StartRoom || room == ExitRoom)
+            {
+                continue;
+            }
+
+            // Spawne eine zufällige Anzahl von Gegnern pro Raum
+            int numEnemiesToSpawn = Random.Range(enemiesPerRoom - 1, enemiesPerRoom + 2); // Z.B. 1 bis 3 Gegner bei enemiesPerRoom = 2
+
+            for (int i = 0; i < numEnemiesToSpawn; i++)
+            {
+                // Wähle eine zufällige Position innerhalb des Raumes
+                Vector2 spawnPosition = new Vector2(
+                    Random.Range(room.bounds.xMin + 1, room.bounds.xMax - 1),
+                    Random.Range(room.bounds.yMin + 1, room.bounds.yMax - 1)
+                );
+
+                Instantiate(enemyPrefab, spawnPosition, Quaternion.identity);
+            }
+        }
     }
 
     private void PlaceRooms()
@@ -373,7 +412,6 @@ public class DungeonGenerator : MonoBehaviour
         // Eine einfache Methode ist es, jede gefüllte Boden-Kachel zu überprüfen und wenn eine
         // ihrer Nachbarkacheln leer ist, dort eine Wand zu platzieren.
 
-        //Bounds _bounds = groundTilemap.localBounds; // Holen Sie sich die Grenzen der Boden-Tilemap
         BoundsInt dungeonBounds = GetDungeonBounds();
 
         for (int x = dungeonBounds.xMin - 2; x < dungeonBounds.xMax + 2; x++) // Etwas größeren Bereich prüfen
