@@ -4,6 +4,10 @@ using UnityEngine.InputSystem;
 public class Player : MonoBehaviour
 {
     [SerializeField] private float moveSpeed = 5f;
+    [SerializeField] HealthBar healthBar;
+
+    public float Health;
+    public float MaxHealth;
     private Rigidbody2D rb;
     private Vector2 moveInput;
     private Animator animator;
@@ -14,6 +18,8 @@ public class Player : MonoBehaviour
     {
         rb = GetComponent<Rigidbody2D>();
         animator = GetComponent<Animator>();
+
+        healthBar.SetMaxHealth(MaxHealth);
 
         // NEU: Deaktiviere den Rigidbody beim Start temporär
         // Das verhindert, dass die Physik den Spieler direkt verschiebt,
@@ -37,6 +43,12 @@ public class Player : MonoBehaviour
             // Wenn noch kein Input, Rigidbody in Ruhe halten
             rb.linearVelocity = Vector2.zero;
         }
+
+        if (Input.GetKeyDown(KeyCode.Minus))
+            SetHealth(-20f);
+
+        if (Input.GetKeyDown(KeyCode.Plus))
+            SetHealth(20f);
     }
 
     public void Move(InputAction.CallbackContext context)
@@ -60,5 +72,13 @@ public class Player : MonoBehaviour
         moveInput = context.ReadValue<Vector2>();
         animator.SetFloat("InputX", moveInput.x);
         animator.SetFloat("InputY", moveInput.y);
+    }
+
+    public void SetHealth(float healthChange)
+    {
+        Health += healthChange;
+        Health = Mathf.Clamp(Health, 0, MaxHealth);
+
+        healthBar.SetHealth(Health);
     }
 }
