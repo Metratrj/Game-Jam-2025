@@ -10,6 +10,61 @@ public class Player : MonoBehaviour
 
     private bool hasReceivedInput = false; // NEU: Flag, ob schon Eingabe da war
 
+    [Header("Shooting")] // NEU
+    [SerializeField] private GameObject projectilePrefab; // Das Projektil-Prefab
+    [SerializeField] private float fireRate = 0.5f; // Wie oft geschossen werden kann (Schuss pro Sekunde)
+    private float nextFireTime = 0f; // Zeitpunkt, ab dem wieder geschossen werden kann
+
+    public void Shoot(InputAction.CallbackContext context)
+    {
+        // Nur schießen, wenn die Aktion "started" ist (Taste gedrückt) und die Abklingzeit abgelaufen ist
+        if (context.started && Time.time >= nextFireTime)
+        {
+            nextFireTime = Time.time + fireRate; // Setze die nächste mögliche Schusszeit
+
+            // Instanziiere das Projektil am Spieler (oder leicht davor)
+            // Die Position des Projektils sollte etwas vor dem Spieler sein, damit es nicht mit dem Spieler kollidiert.
+            Vector3 shootPosition = transform.position + (Vector3)moveInput.normalized * 0.6f; // 0.6f ist ein kleiner Offset
+
+            // Wenn der Spieler sich nicht bewegt, schieße in die letzte Blickrichtung
+            if (moveInput == Vector2.zero)
+            {
+                // Nutze die "LastInputX/Y" aus dem Animator, um die Schussrichtung zu bestimmen
+                float lastInputX = animator.GetFloat("LastInputX");
+                float lastInputY = animator.GetFloat("LastInputY");
+                shootPosition = transform.position + new Vector3(lastInputX, lastInputY, 0).normalized * 0.6f;
+                // Falls LastInput noch nicht gesetzt ist (z.B. Spieler stand von Anfang an still),
+                // schieße einfach nach rechts oder in eine Standardrichtung.
+                if (lastInputX == 0 && lastInputY == 0)
+                {
+                    shootPosition = transform.position + Vector3.right * 0.6f;
+                }
+            }
+
+
+            GameObject projectileInstance = Instantiate(projectilePrefab, shootPosition, Quaternion.identity);
+
+            // Übergebe die Schussrichtung an das Projektil
+            // Wenn Spieler sich bewegt, ist moveInput die Richtung.
+            Vector2 shootDirection = (moveInput == Vector2.zero) ?
+                                      new Vector2(animator.GetFloat("LastInputX"), animator.GetFloat("LastInputY")).normalized :
+                                      moveInput.normalized;
+
+            // Fallback für den Fall, dass keine Richtung gesetzt ist (z.B. wenn LastInputX/Y auch 0 sind)
+            if (shootDirection == Vector2.zero)
+            {
+                shootDirection = Vector2.right; // Standardrichtung, wenn keine andere bekannt ist
+            }
+
+
+            projectileInstance.GetComponent<ProjectileScript>().SetDirection(shootDirection);
+
+            Debug.Log($"Projektil gespawnt in Richtung: {shootDirection}");
+
+            // Optional: Füge hier einen Schuss-Sound oder visuelle Effekte hinzu
+        }
+    }
+
     private void Start()
     {
         rb = GetComponent<Rigidbody2D>();
