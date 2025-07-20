@@ -60,7 +60,8 @@ public class DungeonGenerator : MonoBehaviour
     [Header("Generator-Settings")]
     [SerializeField]
     private int enemiesPerRoom = 2; // Anzahl der Gegner pro Raum
-
+    [SerializeField]
+    private int itemsPerRoom = 1; // Anzahl der Items pro Raum
 
 
     [Tooltip("Breite der generierten Ebene in Tiles")]
@@ -249,6 +250,38 @@ public class DungeonGenerator : MonoBehaviour
         FindStartAndEndRooms();
 
         SpawnEnemies();
+
+        SpawnItems();
+    }
+
+    private void SpawnItems()
+    {
+        if (itemPrefab == null)
+    {
+        Debug.LogWarning("Mushroom Item Prefab ist nicht zugewiesen. Es werden keine Items gespawnt.");
+        return;
+    }
+
+    foreach (Room room in rooms)
+    {
+        // Spawne Items nur in Räumen, die nicht Start- oder Endraum sind (optional)
+        if (room == StartRoom || room == ExitRoom)
+        {
+            continue;
+        }
+
+        int numItemsToSpawn = Random.Range(itemsPerRoom, itemsPerRoom + 2); // Z.B. 1 bis 2 Items bei itemsPerRoom = 1
+
+        for (int i = 0; i < numItemsToSpawn; i++)
+        {
+            Vector2 spawnPosition = new Vector2(
+                Random.Range(room.bounds.xMin + 1, room.bounds.xMax - 1),
+                Random.Range(room.bounds.yMin + 1, room.bounds.yMax - 1)
+            );
+
+            Instantiate(itemPrefab, spawnPosition, Quaternion.identity);
+        }
+    }
     }
 
     private void SpawnEnemies()
