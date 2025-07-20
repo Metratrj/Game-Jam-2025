@@ -4,6 +4,46 @@ using System.Collections.Generic;
 using System.Linq;
 
 
+public enum WallType
+{
+    None,
+    Full,
+    Top,
+    Bottom,
+    Left,
+    Right,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+    InnerTopLeft,
+    InnerTopRight,
+    InnerBottomLeft,
+    InnerBottomRight,
+
+    // Optional
+    // Kreuzung
+    T_Up,
+    T_Down,
+    T_Left,
+    T_Right,
+
+    Cross,
+}
+
+[System.Serializable]
+public class WallTileMapping
+{
+    public WallType wallType;
+    public TileBase tile;
+
+    public WallTileMapping(WallType type, TileBase tile)
+    {
+        this.wallType = type;
+        this.tile = tile;
+    }
+}
+
 public class DungeonGenerator : MonoBehaviour
 {
     [Header("Tilemaps and Tiles")]
@@ -30,6 +70,7 @@ public class DungeonGenerator : MonoBehaviour
     [Tooltip("Minimale Raumgröße")] public int minRoomSize = 5;
     [Tooltip("Maximale Raumgröße")] public int maxRoomSize = 12;
 
+    [Tooltip("Anzahl der Versuche, um Räume zu generieren, bevor abgebrochen wird")]
     [SerializeField] private int maxGenerationAttempts = 100;
 
 
@@ -39,14 +80,10 @@ public class DungeonGenerator : MonoBehaviour
     [Tooltip("Anzahl der Items pro Ebene")]
     public int itemCount = 10;
 
-    private enum MapCellType
-    {
-        Empty,
-        Wall,
-        Floor
-    }
-
-    private MapCellType[,] levelGrid;
+    [Header("Smart Wall Tiles")]
+    [SerializeField]
+    private List<WallTileMapping> wallTileMappings = new List<WallTileMapping>();
+    public Dictionary<WallType, TileBase> wallTiles = new Dictionary<WallType, TileBase>();
 
     private struct Room
     {
@@ -70,12 +107,53 @@ public class DungeonGenerator : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
+        
+        Debug.Log("DungeonGenerator started.");
+        // Generate the dungeon when the script starts
+        // This can be called from the editor or at runtime.
+        // You can also call this method from a button in the inspector.
         GenerateDungeon();
+    }
+
+    void Awake()
+    {
+        // Lösche das Dictionary bei jedem Start, um alte Einträge zu vermeiden
+        wallTiles.Clear();
+
+        // Initialisiere das Dictionary aus der serialisierten Liste
+        foreach (var mapping in wallTileMappings)
+        {
+            // Prüfe, ob das Tile zugewiesen ist UND ob der Key noch nicht existiert
+            if (mapping.tile != null && !wallTiles.ContainsKey(mapping.wallType))
+            {
+                wallTiles.Add(mapping.wallType, mapping.tile);
+            }
+            else if (mapping.tile == null)
+            {
+                Debug.LogWarning($"WallTileMapping für {mapping.wallType} hat kein Tile zugewiesen im Inspector!");
+            }
+            else if (wallTiles.ContainsKey(mapping.wallType))
+            {
+                Debug.LogWarning($"Doppelter WallType-Eintrag für {mapping.wallType} im Inspector. Nur der erste wird verwendet.");
+            }
+        }
+
+        if (wallTiles.Count == 0)
+        {
+            Debug.LogError("Keine Wand-Tile-Mappings zugewiesen! Dungeon kann nicht korrekt gezeichnet werden.");
+        }
+        else
+        {
+            Debug.Log($"DungeonGenerator initialisiert mit {wallTiles.Count} Wand-Tile-Mappings.");
+        }
     }
 
     [ContextMenu("Generate Dungeon")]
     void GenerateDungeon()
     {
+        Awake(); // Initialize wall tiles
+        Debug.Log("Generating dungeon...");
+        // Validate inputs
         if (groundTilemap == null || wallTilemap == null || groundTile == null || wallTile == null)
         {
             Debug.LogError("Tilemaps or Tiles are not assigned.");
@@ -106,61 +184,6 @@ public class DungeonGenerator : MonoBehaviour
         ConnectRooms();
 
         DrawTiles();
-
-        return; // Temporarily disable dungeon generation for testing
-        levelGrid = new MapCellType[levelWidth, levelHeight];
-        for (int x = 0; x < levelWidth; x++)
-        {
-            for (int y = 0; y < levelHeight; y++)
-            {
-                levelGrid[x, y] = MapCellType.Wall;
-            }
-        }
-
-        rooms.Clear();
-
-        for (int i = 0; i < numberOfRooms; i++)
-        {
-            int roomWidth = Random.Range(minRoomSize, maxRoomSize + 1);
-            int roomHeight = Random.Range(minRoomSize, maxRoomSize + 1);
-            int roomX = Random.Range(1, levelWidth - roomWidth - 1);
-            int roomY = Random.Range(1, levelHeight - roomHeight - 1);
-
-            Room newRoom = new Room(roomX, roomY, roomWidth, roomHeight);
-            bool intersects = false;
-
-            foreach (var existingRoom in rooms)
-            {
-                if (newRoom.bounds.Overlaps(existingRoom.bounds))
-                {
-                    intersects = true;
-                    break;
-                }
-            }
-
-            if (!intersects)
-            {
-                rooms.Add(newRoom);
-                CarveRoom(newRoom);
-            }
-        }
-
-        if (rooms.Count == 0)
-        {
-            Debug.LogError("No rooms generated");
-            return;
-        }
-
-        rooms = rooms.OrderBy(room => room.center.x).ThenBy(r => r.center.y).ToList();
-
-        for (int i = 0; i < rooms.Count - 1; i++)
-        {
-            // Connect rooms here
-        }
-
-        // SpawnEntities();
-
-        RenderTiles();
     }
 
     private void PlaceRooms()
@@ -293,74 +316,132 @@ public class DungeonGenerator : MonoBehaviour
         // ihrer Nachbarkacheln leer ist, dort eine Wand zu platzieren.
 
         //Bounds _bounds = groundTilemap.localBounds; // Holen Sie sich die Grenzen der Boden-Tilemap
-        BoundsInt bounds = groundTilemap.cellBounds; // Holen Sie sich die Grenzen der Boden-Tilemap in Ganzzahlen
-        for (int x = bounds.xMin - 1; x < bounds.xMax + 1; x++)
+        BoundsInt dungeonBounds = GetDungeonBounds();
+
+        for (int x = dungeonBounds.xMin - 2; x < dungeonBounds.xMax + 2; x++) // Etwas größeren Bereich prüfen
         {
-            for (int y = bounds.yMin - 1; y < bounds.yMax + 1; y++)
+            for (int y = dungeonBounds.yMin - 2; y < dungeonBounds.yMax + 2; y++) // Etwas größeren Bereich prüfen
             {
                 Vector3Int pos = new Vector3Int(x, y, 0);
-                // Wenn die aktuelle Position leer ist UND eine benachbarte Zelle Boden enthält, ist es eine Wand
-                if (groundTilemap.GetTile(pos) == null) // Position ist leer (kein Boden)
+
+                // Ist an dieser Position bereits Boden? Dann ist es keine Wand.
+                if (groundTilemap.GetTile(pos) != null)
                 {
-                    // Überprüfe die 8 umliegenden Zellen + die eigene Zelle
-                    bool hasAdjacentGround = false;
-                    for (int dx = -1; dx <= 1; dx++)
+                    continue; // Überspringe, da hier Boden ist
+                }
+
+                // Überprüfe die umliegenden Zellen, um den Wandtyp zu bestimmen
+                WallType type = GetWallType(pos);
+                //Debug.Log($"Position: {pos}, WallType: {type}");
+
+                // Nur zeichnen, wenn ein passender Wandtyp gefunden wurde (d.h. es ist wirklich eine Wand)
+                if (type != WallType.None && wallTiles.ContainsKey(type))
+                {
+                    wallTilemap.SetTile(pos, wallTiles[type]);
+                }
+                else if (type != WallType.None && !wallTiles.ContainsKey(type))
+                {
+                    // Fallback: Wenn wir einen Typ identifiziert haben, aber kein Tile dafür zugewiesen ist
+                    Debug.LogWarning($"Kein Tile für WallType: {type} zugewiesen!");
+                    if (wallTiles.ContainsKey(WallType.Full)) // Optional: Fallback auf ein Standard-Wand-Tile
                     {
-                        for (int dy = -1; dy <= 1; dy++)
-                        {
-                            // Überspringe die aktuelle Zelle selbst
-                            if (dx == 0 && dy == 0) continue;
-
-                            if (groundTilemap.GetTile(pos + new Vector3Int(dx, dy, 0)) != null)
-                            {
-                                hasAdjacentGround = true;
-                                break;
-                            }
-                        }
-                        if (hasAdjacentGround) break;
-                    }
-
-                    if (hasAdjacentGround)
-                    {
-                        wallTilemap.SetTile(pos, wallTile);
+                        wallTilemap.SetTile(pos, wallTiles[WallType.Full]);
                     }
                 }
             }
         }
     }
 
-    void RenderTiles()
-    {
-        groundTilemap.ClearAllTiles();
-        wallTilemap.ClearAllTiles();
+    // Helper-Funktion, um zu prüfen, ob eine Zelle Boden ist
+private bool IsGround(Vector3Int position)
+{
+    return groundTilemap.GetTile(position) != null;
+}
 
-        for (int x = 0; x < levelWidth; x++)
-        {
-            for (int y = 0; y < levelHeight; y++)
-            {
-                Vector3Int cellPosition = new Vector3Int(x, y, 0);
-                if (levelGrid[x, y] == MapCellType.Floor)
-                {
-                    groundTilemap.SetTile(cellPosition, groundTile);
-                }
-                else if (levelGrid[x, y] == MapCellType.Wall)
-                {
-                    wallTilemap.SetTile(cellPosition, wallTile);
-                }
-            }
-        }
+private WallType GetWallType(Vector3Int position)
+{
+    // Status der direkten Nachbarn
+    bool top = IsGround(position + new Vector3Int(0, 1, 0));
+    bool bottom = IsGround(position + new Vector3Int(0, -1, 0));
+    bool left = IsGround(position + new Vector3Int(-1, 0, 0));
+    bool right = IsGround(position + new Vector3Int(1, 0, 0));
+
+    // Status der diagonalen Nachbarn
+    bool topLeft = IsGround(position + new Vector3Int(-1, 1, 0));
+    bool topRight = IsGround(position + new Vector3Int(1, 1, 0));
+    bool bottomLeft = IsGround(position + new Vector3Int(-1, -1, 0));
+    bool bottomRight = IsGround(position + new Vector3Int(1, -1, 0));
+
+    // --- Priorität 1: Innere Ecken (konkave Ecken) ---
+    // Dies sind Fälle, wo der Boden in die Wand "einspringt"
+    // Beispiel: InnerBottomRight -> Oben und Links ist Boden, aber oben-links ist KEIN Boden
+    if (top && left && !topLeft && !bottom && !right) return WallType.InnerBottomRight;
+    if (top && right && !topRight && !bottom && !left) return WallType.InnerBottomLeft;
+    if (bottom && left && !bottomLeft && !top && !right) return WallType.InnerTopRight;
+    if (bottom && right && !bottomRight && !top && !left) return WallType.InnerTopLeft;
+
+    // --- Priorität 2: Äußere Ecken (konvexe Ecken) ---
+    // Beispiel: BottomLeft -> Oben und Rechts ist Boden
+    if (top && right && !bottom && !left) return WallType.BottomLeft; // Wall is Bottom-Left of ground area
+    if (top && left && !bottom && !right) return WallType.BottomRight; // Wall is Bottom-Right of ground area
+    if (bottom && right && !top && !left) return WallType.TopLeft; // Wall is Top-Left of ground area
+    if (bottom && left && !top && !right) return WallType.TopRight; // Wall is Top-Right of ground area
+
+    // --- Priorität 3: Geraden Kanten / Einzelne Seiten ---
+    // Beispiel: Top -> Unten ist Boden
+    if (top && !bottom && !left && !right) return WallType.Bottom; // Wall is below ground
+    if (bottom && !top && !left && !right) return WallType.Top; // Wall is above ground
+    if (left && !right && !top && !bottom) return WallType.Right; // Wall is right of ground
+    if (right && !left && !top && !bottom) return WallType.Left; // Wall is left of ground
+
+    // --- Priorität 4: Geraden Wände (umgeben von Boden auf zwei gegenüberliegenden Seiten) ---
+    if (top && bottom && !left && !right) return WallType.Full; // Vertikale Wand
+    if (left && right && !top && !bottom) return WallType.Full; // Horizontale Wand
+
+    // --- Priorität 5: T-Kreuzungen (wenn du diese Tiles hast) ---
+    if (top && bottom && left && !right) return WallType.T_Right;
+    if (top && bottom && right && !left) return WallType.T_Left;
+    if (top && left && right && !bottom) return WallType.T_Down;
+    if (bottom && left && right && !top) return WallType.T_Up;
+
+    // --- Priorität 6: Kreuzung (wenn alle 4 Seiten Boden sind, aber die Zelle selbst keine ist) ---
+    if (top && bottom && left && right)
+    {
+        // Könnte eine Kreuzung sein, oder auch nur ein überflüssiger Wandversuch
+        // Wenn du ein spezielles Kreuzungs-Tile hast, hier verwenden, sonst None
+        return WallType.Cross; // Wenn du ein solches Tile hast
     }
 
-    void CarveRoom(Room newRoom)
+    // --- Fallback: Wenn KEINER der Nachbarn Boden ist, dann ist es auch keine Wand. ---
+    // Dies fängt Zellen ab, die weit außerhalb des Dungeons liegen.
+    if (!top && !bottom && !left && !right && !topLeft && !topRight && !bottomLeft && !bottomRight)
     {
-        for (int x = 0; x < newRoom.bounds.x + newRoom.bounds.width; x++)
-        {
-            for (int y = 0; y < newRoom.bounds.y + newRoom.bounds.height; y++)
-            {
-                levelGrid[x, y] = MapCellType.Floor;
-            }
-        }
+        return WallType.None;
     }
+
+    // Letzter Fallback: Wenn wir hier ankommen, haben wir eine Kombination von Nachbarn,
+    // die keinem der spezifischen WallTypes oben zugeordnet werden konnten.
+    // In diesem Fall kannst du ein generisches "Full" Tile verwenden oder es als "None" behandeln.
+    // Ein "Full" Tile ist hier oft eine gute Notlösung.
+    return WallType.Full;
+}
+
+    private BoundsInt GetDungeonBounds()
+    {
+        if (rooms.Count == 0)
+        {
+            return new BoundsInt(0, 0, 0, 1, 1, 1); // Rückgabe eines leeren BoundsInt, wenn keine Räume vorhanden sind
+        }
+
+        int minX = rooms.Min(r => r.bounds.xMin);
+        int minY = rooms.Min(r => r.bounds.yMin);
+        int maxX = rooms.Max(r => r.bounds.xMax);
+        int maxY = rooms.Max(r => r.bounds.yMax);
+
+        return new BoundsInt(minX, minY, 0, maxX - minX, maxY - minY, 1);
+    }
+
+
 
     // Update is called once per frame
     void Update()
